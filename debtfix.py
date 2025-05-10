@@ -18,11 +18,14 @@ creds = ServiceAccountCredentials.from_json_keyfile_dict(service_account_info, s
 client = gspread.authorize(creds)
 
 # -- SPREADSHEET URL --
+import traceback
+
 try:
     sheet_id = "1QnnLFcFbyILXV7KvialsAgg1ZnvlohULXaRsJojADh0"
     worksheet = client.open_by_key(sheet_id).sheet1
 except Exception as e:
-    st.error(f"❌ Permission issue accessing the sheet:\n\n{e}")
+    tb = traceback.format_exc()
+    st.error(f"❌ Permission issue accessing the sheet:\n\n{tb}")
     st.stop()
 
 
