@@ -4,6 +4,8 @@ An interactive, secure debt reduction dashboard built in **Streamlit**, powered 
 
 This app helps individuals on a structured credit recovery plan track credit card balances, visualize utilization, and plan their payoff across time.
 
+https://debtfix.streamlit.app/
+
 ---
 
 ## ✅ Features
