@@ -19,13 +19,12 @@ client = gspread.authorize(creds)
 
 # -- SPREADSHEET URL --
 try:
-    # Extract just the Sheet ID
-    SHEET_URL = "https://docs.google.com/spreadsheets/d/1QnnLFcFbyILXV7KvialsAgg1ZnvlohULXaRsJojADh0"
     sheet_id = "1QnnLFcFbyILXV7KvialsAgg1ZnvlohULXaRsJojADh0"
     worksheet = client.open_by_key(sheet_id).sheet1
 except Exception as e:
-    st.error(f"Permission issue accessing the sheet: {e}")
+    st.error(f"❌ Permission issue accessing the sheet:\n\n{e}")
     st.stop()
+
 
 
 # -- LOAD DATA --
