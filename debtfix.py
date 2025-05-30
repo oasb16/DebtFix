@@ -14,7 +14,7 @@ rent = st.sidebar.number_input("Monthly Rent", value=750.0)
 utilities = st.sidebar.number_input("Monthly Utilities", value=60.0)
 other_fixed = st.sidebar.number_input("Other Monthly Fixed Expenses", value=0.0)
 strategy = st.sidebar.selectbox("Repayment Strategy", ["Avalanche (Highest APR)", "Snowball (Lowest Balance)"])
-biweeks = st.sidebar.slider("Simulation Length (biweekly)", min_value=12, max_value=104, value=52)
+biweeks = st.sidebar.slider("Simulation Length (biweekly)", min_value=1, max_value=104, value=52)
 
 # --- EXPENSE PROCESSING ---
 biweekly_expense = (rent + utilities + other_fixed) / 2
