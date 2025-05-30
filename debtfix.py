@@ -53,7 +53,8 @@ for period in range(biweeks):
             continue
 
         min_pay = max(row["Balance"] * 0.02, 25)
-        pay = min(available, min_pay + (available - min_pay) * 0.6)
+        max_possible = row["Balance"] + row["Balance"] * (row["APR"] / 100 / 26)
+        pay = min(available, max(min_pay, max_possible))  # Never pay more than needed
         interest = row["Balance"] * (row["APR"] / 100 / 26)
         principal = pay - interest
         new_balance = row["Balance"] - principal
@@ -70,8 +71,8 @@ timeline_df = pd.DataFrame(timeline)
 
 # --- METRICS SECTION ---
 original_total = debt_df["Balance"].sum()
-total_paid = timeline_df.drop(columns=["Biweek"]).sum().sum()
 remaining_balance = remaining["Balance"].sum()
+total_paid = original_total - remaining_balance
 weighted_apr = (debt_df["Balance"] * debt_df["APR"]).sum() / original_total
 
 st.subheader("📊 Totals & Live Metrics")
