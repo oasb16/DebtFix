@@ -14,7 +14,7 @@ rent = st.sidebar.number_input("Monthly Rent", value=750.0)
 utilities = st.sidebar.number_input("Monthly Utilities", value=60.0)
 other_fixed = st.sidebar.number_input("Other Monthly Fixed Expenses", value=0.0)
 strategy = st.sidebar.selectbox("Repayment Strategy", ["Avalanche (Highest APR)", "Snowball (Lowest Balance)"])
-biweeks = st.sidebar.slider("Simulation Length (biweekly)", min_value=0, max_value=52, value=52)
+biweeks = st.sidebar.slider("Simulation Length (biweekly)", min_value=1, max_value=52, value=12)
 
 # --- EXPENSE PROCESSING ---
 biweekly_expense = (rent + utilities + other_fixed) / 2
@@ -33,7 +33,6 @@ debt_df = st.data_editor(initial_data, use_container_width=True, num_rows="dynam
 
 # --- STRATEGY LOGIC ---
 df = debt_df.copy()
-df["ID"] = df.index
 if strategy == "Avalanche (Highest APR)":
     df = df.sort_values("APR", ascending=False)
 else:
@@ -41,7 +40,7 @@ else:
 
 # --- DEBT SIMULATION ---
 timeline = []
-remaining = df[["ID", "Name", "Balance", "APR", "Type"]].copy()
+remaining = df[["Name", "Balance", "APR"]].copy()
 
 for period in range(biweeks):
     row_entry = {"Biweek": period + 1}
@@ -53,12 +52,12 @@ for period in range(biweeks):
             continue
 
         min_pay = max(row["Balance"] * 0.02, 25)
-        max_possible = row["Balance"] + row["Balance"] * (row["APR"] / 100 / 26)
-        pay = min(available, max(min_pay, max_possible))  # Never pay more than needed
         interest = row["Balance"] * (row["APR"] / 100 / 26)
-        principal = pay - interest
-        new_balance = row["Balance"] - principal
+        target_pay = min(available, min_pay + (available - min_pay) * 0.6)
+        principal = max(target_pay - interest, 0)
+        pay = min(row["Balance"], principal + interest)
 
+        new_balance = row["Balance"] - principal
         remaining.at[i, "Balance"] = max(new_balance, 0)
         row_entry[row["Name"]] = round(pay, 2)
         available -= pay
@@ -84,35 +83,37 @@ col4.metric("Weighted APR", f"{weighted_apr:.2f}%")
 
 # --- NUMBERS TABLE ---
 st.subheader("📄 Biweekly Payments Table")
-payment_totals = timeline_df.drop(columns=["Biweek"]).sum().reset_index()
-payment_totals.columns = ["Debt", "Total Paid"]
-payment_totals["Total Paid"] = payment_totals["Total Paid"].apply(lambda x: f"${x:,.2f}")
 
-# Display full biweekly matrix
-st.dataframe(timeline_df.set_index("Biweek"), use_container_width=True)
+if not timeline_df.empty:
+    st.dataframe(timeline_df.set_index("Biweek"), use_container_width=True)
 
-# Show per-debt totals summary
-st.dataframe(payment_totals.set_index("Debt"), use_container_width=True)
-
+    payment_totals = timeline_df.drop(columns=["Biweek"]).sum().reset_index()
+    payment_totals.columns = ["Debt", "Total Paid"]
+    payment_totals["Total Paid"] = payment_totals["Total Paid"].apply(lambda x: f"${x:,.2f}")
+    st.dataframe(payment_totals.set_index("Debt"), use_container_width=True)
+else:
+    st.info("⚠️ No payment simulation data yet. Adjust your inputs to begin.")
 
 # --- CHARTS ---
-st.subheader("📈 Biweekly Payments Timeline")
-fig1, ax1 = plt.subplots(figsize=(12, 5))
-timeline_df.set_index("Biweek").plot(kind="bar", stacked=True, ax=ax1, width=1.0)
-ax1.set_ylabel("Payment ($)")
-ax1.set_title("Biweekly Payments Across Debts")
-st.pyplot(fig1)
+if not timeline_df.empty:
+    st.subheader("📈 Biweekly Payments Timeline")
+    fig1, ax1 = plt.subplots(figsize=(12, 5))
+    timeline_df.set_index("Biweek").plot(kind="bar", stacked=True, ax=ax1, width=1.0)
+    ax1.set_ylabel("Payment ($)")
+    ax1.set_title("Biweekly Payments Across Debts")
+    st.pyplot(fig1)
 
-st.subheader("📉 Remaining Debt Balances")
-fig2, ax2 = plt.subplots()
-remaining.set_index("Name")["Balance"].plot(kind="bar", ax=ax2, color="crimson")
-ax2.set_ylabel("Balance ($)")
-ax2.set_title("Remaining Balances After Simulation")
-st.pyplot(fig2)
+    st.subheader("📉 Remaining Debt Balances")
+    fig2, ax2 = plt.subplots()
+    remaining.set_index("Name")["Balance"].plot(kind="bar", ax=ax2, color="crimson")
+    ax2.set_ylabel("Balance ($)")
+    ax2.set_title("Remaining Balances After Simulation")
+    st.pyplot(fig2)
 
 # --- DOWNLOAD ---
-st.download_button("📥 Download Pay Plan CSV", data=timeline_df.to_csv(index=False),
-                   file_name="ScarOS_Biweekly_Accelerator.csv")
+if not timeline_df.empty:
+    st.download_button("📥 Download Pay Plan CSV", data=timeline_df.to_csv(index=False),
+                       file_name="ScarOS_Biweekly_Accelerator.csv")
 
 st.markdown("---")
 st.caption("ScarOS ∞ Debt System – Recurse, Reduce, Rise.")
