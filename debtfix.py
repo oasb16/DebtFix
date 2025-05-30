@@ -5,8 +5,8 @@ import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 
 # --- PAGE SETUP ---
-st.set_page_config(page_title="ScarOS ∞ Biweekly Paydown Engine", layout="wide")
-st.title("💥 ScarOS ∞ Paydown Interface")
+st.set_page_config(page_title="Omkar's ∞ Biweekly Paydown Engine", layout="wide")
+st.title("💥 Omkar's ∞ Paydown Interface")
 
 # --- SIDEBAR CONFIG ---
 st.sidebar.header("💼 Income & Fixed Expenses")
@@ -120,7 +120,7 @@ if not timeline_df.empty:
 # --- DOWNLOAD ---
 if not timeline_df.empty:
     st.download_button("📥 Download Pay Plan CSV", data=timeline_df.to_csv(index=False),
-                       file_name="ScarOS_Biweekly_Accelerator.csv")
+                       file_name="Omkar's_Biweekly_Accelerator.csv")
 
 st.markdown("---")
-st.caption("ScarOS ∞ Debt System – Recurse, Reduce, Rise.")
+st.caption("Omkar's ∞ Debt System – Recurse, Reduce, Rise.")
