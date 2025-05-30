@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from datetime import datetime, timedelta
 
 # --- PAGE SETUP ---
 st.set_page_config(page_title="ScarOS ∞ Biweekly Paydown Engine", layout="wide")
@@ -68,6 +69,12 @@ for period in range(biweeks):
 
 timeline_df = pd.DataFrame(timeline)
 
+# --- ADD BIWEEKLY DATES ---
+start_date = datetime(2025, 5, 28)
+biweekly_dates = [start_date + timedelta(weeks=2 * i) for i in range(len(timeline_df))]
+timeline_df["Date"] = biweekly_dates
+timeline_df = timeline_df[["Date"] + [col for col in timeline_df.columns if col != "Date"]]
+
 # --- METRICS SECTION ---
 original_total = debt_df["Balance"].sum()
 remaining_balance = remaining["Balance"].sum()
@@ -85,9 +92,9 @@ col4.metric("Weighted APR", f"{weighted_apr:.2f}%")
 st.subheader("📄 Biweekly Payments Table")
 
 if not timeline_df.empty:
-    st.dataframe(timeline_df.set_index("Biweek"), use_container_width=True)
+    st.dataframe(timeline_df.set_index("Date"), use_container_width=True)
 
-    payment_totals = timeline_df.drop(columns=["Biweek"]).sum().reset_index()
+    payment_totals = timeline_df.drop(columns=["Date", "Biweek"]).sum().reset_index()
     payment_totals.columns = ["Debt", "Total Paid"]
     payment_totals["Total Paid"] = payment_totals["Total Paid"].apply(lambda x: f"${x:,.2f}")
     st.dataframe(payment_totals.set_index("Debt"), use_container_width=True)
@@ -98,7 +105,7 @@ else:
 if not timeline_df.empty:
     st.subheader("📈 Biweekly Payments Timeline")
     fig1, ax1 = plt.subplots(figsize=(12, 5))
-    timeline_df.set_index("Biweek").plot(kind="bar", stacked=True, ax=ax1, width=1.0)
+    timeline_df.set_index("Date").drop(columns=["Biweek"]).plot(kind="bar", stacked=True, ax=ax1, width=1.0)
     ax1.set_ylabel("Payment ($)")
     ax1.set_title("Biweekly Payments Across Debts")
     st.pyplot(fig1)
