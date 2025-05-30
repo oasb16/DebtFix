@@ -81,6 +81,19 @@ col2.metric("Total Paid", f"${total_paid:,.2f}")
 col3.metric("Remaining", f"${remaining_balance:,.2f}")
 col4.metric("Weighted APR", f"{weighted_apr:.2f}%")
 
+# --- NUMBERS TABLE ---
+st.subheader("📄 Biweekly Payments Table")
+payment_totals = timeline_df.drop(columns=["Biweek"]).sum().reset_index()
+payment_totals.columns = ["Debt", "Total Paid"]
+payment_totals["Total Paid"] = payment_totals["Total Paid"].apply(lambda x: f"${x:,.2f}")
+
+# Display full biweekly matrix
+st.dataframe(timeline_df.set_index("Biweek"), use_container_width=True)
+
+# Show per-debt totals summary
+st.dataframe(payment_totals.set_index("Debt"), use_container_width=True)
+
+
 # --- CHARTS ---
 st.subheader("📈 Biweekly Payments Timeline")
 fig1, ax1 = plt.subplots(figsize=(12, 5))
