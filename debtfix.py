@@ -16,7 +16,8 @@ dynamodb = boto3.resource(
     aws_secret_access_key=st.secrets["AWS_SECRET_ACCESS_KEY"],
     region_name=st.secrets["AWS_REGION"]
 )
-table = dynamodb.Table("DEbtfix_cards")
+table = dynamodb.Table("debtfix_cards")
+
 
 # --- CARD ADDITION FORM ---
 with st.expander("➕ Add New Credit Card / Loan"):
