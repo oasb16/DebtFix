@@ -2,11 +2,48 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import boto3
 from datetime import datetime, timedelta
 
 # --- PAGE SETUP ---
 st.set_page_config(page_title="Omkar's ∞ Biweekly Paydown Engine", layout="wide")
 st.title("💥 Omkar's ∞ Paydown Interface")
+
+# --- AWS DYNAMODB SETUP ---
+dynamodb = boto3.resource(
+    'dynamodb',
+    aws_access_key_id=st.secrets["AWS_ACCESS_KEY"],
+    aws_secret_access_key=st.secrets["AWS_SECRET_ACCESS_KEY"],
+    region_name=st.secrets["AWS_REGION"]
+)
+table = dynamodb.Table("ScarOS_Cards")
+
+# --- CARD ADDITION FORM ---
+with st.expander("➕ Add New Credit Card / Loan"):
+    with st.form("card_form", clear_on_submit=True):
+        card_name = st.text_input("Card Name")
+        balance = st.number_input("Current Balance", min_value=0.0, step=100.0)
+        limit = st.number_input("Credit Limit (0 if N/A)", min_value=0.0, step=100.0)
+        apr = st.number_input("APR (%)", min_value=0.0, step=0.01)
+        card_type = st.selectbox("Type", ["Credit", "Loan"])
+        submit = st.form_submit_button("💾 Add Card")
+
+        if submit and card_name:
+            table.put_item(Item={
+                "Name": card_name,
+                "Balance": float(balance),
+                "Limit": float(limit),
+                "APR": float(apr),
+                "Type": card_type
+            })
+            st.success(f"✅ {card_name} added!")
+
+# --- LOAD CARDS FROM DB ---
+response = table.scan()
+initial_data = pd.DataFrame(response["Items"])
+if initial_data.empty:
+    st.warning("🟡 No card data found. Add a card to begin.")
+    st.stop()
 
 # --- SIDEBAR CONFIG ---
 st.sidebar.header("💼 Income & Fixed Expenses")
@@ -21,19 +58,15 @@ biweeks = st.sidebar.slider("Simulation Length (biweekly)", min_value=1, max_val
 biweekly_expense = (rent + utilities + other_fixed) / 2
 free_cash = paycheck - biweekly_expense
 
-# --- DEBT TABLE (Preloaded) ---
-st.subheader("📄 Credit Card & Loan Inputs (Edit Me)")
-initial_data = pd.DataFrame([
-    {"Name": "AMEX", "Balance": 14860.0, "Limit": 15000.0, "APR": 25.99, "Type": "Credit"},
-    {"Name": "CITI", "Balance": 649.0, "Limit": 2500.0, "APR": 0.0, "Type": "Credit"},
-    {"Name": "Bilt", "Balance": 5424.0, "Limit": 6000.0, "APR": 23.49, "Type": "Credit"},
-    {"Name": "Personal Loan", "Balance": 11000.0, "Limit": 0.0, "APR": 0.0, "Type": "Loan"},
-    {"Name": "Venmo", "Balance": 4036.0, "Limit": 4400.0, "APR": 23.49, "Type": "Credit"},
-])
+# --- DEBT TABLE DISPLAY ---
+st.subheader("📄 Current Credit Card & Loan Data")
 debt_df = st.data_editor(initial_data, use_container_width=True, num_rows="dynamic")
 
 # --- STRATEGY LOGIC ---
 df = debt_df.copy()
+df["Balance"] = df["Balance"].astype(float)
+df["APR"] = df["APR"].astype(float)
+
 if strategy == "Avalanche (Highest APR)":
     df = df.sort_values("APR", ascending=False)
 else:
@@ -88,7 +121,7 @@ col2.metric("Total Paid", f"${total_paid:,.2f}")
 col3.metric("Remaining", f"${remaining_balance:,.2f}")
 col4.metric("Weighted APR", f"{weighted_apr:.2f}%")
 
-# --- NUMBERS TABLE ---
+# --- BIWEEKLY PAYMENTS TABLE ---
 st.subheader("📄 Biweekly Payments Table")
 
 if not timeline_df.empty:
@@ -120,7 +153,7 @@ if not timeline_df.empty:
 # --- DOWNLOAD ---
 if not timeline_df.empty:
     st.download_button("📥 Download Pay Plan CSV", data=timeline_df.to_csv(index=False),
-                       file_name="Omkar's_Biweekly_Accelerator.csv")
+                       file_name="Omkar_Biweekly_Strategy.csv")
 
 st.markdown("---")
 st.caption("Omkar's ∞ Debt System – Recurse, Reduce, Rise.")
