@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import boto3
+import decimal
 from datetime import datetime, timedelta
 
 # --- PAGE SETUP ---
@@ -18,34 +19,14 @@ dynamodb = boto3.resource(
 )
 table = dynamodb.Table("debtfix_cards")
 
+# --- CONVERSION FIX FOR DYNAMODB ---
+def to_decimal(val):
+    if isinstance(val, (float, int, np.floating, np.integer)):
+        return decimal.Decimal(str(round(val, 8)))
+    return val
 
-
-
-
-
-
-import streamlit as st
-import pandas as pd
-import boto3
-import numpy as np
-import decimal
-from datetime import datetime, date
-from boto3.dynamodb.conditions import Key
-
-# --- AWS DYNAMODB INIT ---
-dynamodb = boto3.resource(
-    'dynamodb',
-    aws_access_key_id=st.secrets["AWS_ACCESS_KEY"],
-    aws_secret_access_key=st.secrets["AWS_SECRET_ACCESS_KEY"],
-    region_name=st.secrets["AWS_REGION"]
-)
-table = dynamodb.Table("debtfix_cards")
-
-# --- DECIMAL-SAFE CONVERSION ---
-def to_decimal(value):
-    if isinstance(value, (int, float, np.integer, np.floating)):
-        return decimal.Decimal(str(round(value, 8)))  # Limit precision for safety
-    return value
+def from_decimal(val):
+    return float(val) if isinstance(val, decimal.Decimal) else val
 
 # --- CARD FORM ---
 with st.expander("➕ Add New Credit Card / Loan", expanded=True):
@@ -72,32 +53,22 @@ with st.expander("➕ Add New Credit Card / Loan", expanded=True):
                 st.error("❌ Failed to save card.")
                 st.exception(e)
 
-# --- LOAD & DISPLAY CARDS ---
+# --- LOAD CARDS FROM DB ---
 try:
     response = table.scan()
     items = response.get("Items", [])
     if not items:
         st.warning("🟡 No cards found in the database.")
+        initial_data = pd.DataFrame(columns=["Name", "Balance", "Limit", "APR", "Type"])
     else:
-        df = pd.DataFrame(items)
-        # Convert Decimal to float for display
+        initial_data = pd.DataFrame(items)
         for col in ["Balance", "Limit", "APR"]:
-            if col in df.columns:
-                df[col] = df[col].apply(lambda x: float(x) if isinstance(x, decimal.Decimal) else x)
-
-        st.subheader("📄 Cards Stored in DynamoDB")
-        st.dataframe(df, use_container_width=True)
+            if col in initial_data.columns:
+                initial_data[col] = initial_data[col].apply(from_decimal)
 except Exception as e:
-    st.error("❌ Could not load card data from DynamoDB.")
+    st.error("❌ Error loading data from DynamoDB.")
     st.exception(e)
-
-
-
-
-
-
-
-
+    initial_data = pd.DataFrame(columns=["Name", "Balance", "Limit", "APR", "Type"])
 
 # --- SIDEBAR CONFIG ---
 st.sidebar.header("💼 Income & Fixed Expenses")
@@ -114,7 +85,7 @@ free_cash = paycheck - biweekly_expense
 
 # --- DEBT TABLE DISPLAY ---
 st.subheader("📄 Current Credit Card & Loan Data")
-debt_df = st.data_editor(initial_data, use_container_width=True, num_rows="dynamic")
+debt_df = st.data_editor(initial_data.copy(), use_container_width=True, num_rows="dynamic")
 
 # --- STRATEGY LOGIC ---
 df = debt_df.copy()
@@ -163,10 +134,10 @@ timeline_df["Date"] = biweekly_dates
 timeline_df = timeline_df[["Date"] + [col for col in timeline_df.columns if col != "Date"]]
 
 # --- METRICS SECTION ---
-original_total = debt_df["Balance"].sum()
+original_total = df["Balance"].sum()
 remaining_balance = remaining["Balance"].sum()
 total_paid = original_total - remaining_balance
-weighted_apr = (debt_df["Balance"] * debt_df["APR"]).sum() / original_total
+weighted_apr = (df["Balance"] * df["APR"]).sum() / original_total if original_total > 0 else 0
 
 st.subheader("📊 Totals & Live Metrics")
 col1, col2, col3, col4 = st.columns(4)
@@ -177,7 +148,6 @@ col4.metric("Weighted APR", f"{weighted_apr:.2f}%")
 
 # --- BIWEEKLY PAYMENTS TABLE ---
 st.subheader("📄 Biweekly Payments Table")
-
 if not timeline_df.empty:
     st.dataframe(timeline_df.set_index("Date"), use_container_width=True)
 
