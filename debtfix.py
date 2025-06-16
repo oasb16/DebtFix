@@ -72,7 +72,7 @@ except Exception as e:
 
 # --- SIDEBAR CONFIG ---
 st.sidebar.header("💼 Income & Fixed Expenses")
-paycheck = st.sidebar.number_input("Biweekly Take-home Pay ($)", value=3116.18)
+paycheck = st.sidebar.number_input("Biweekly Take-home Pay ($)", value=2000.00)
 rent = st.sidebar.number_input("Monthly Rent", value=750.0)
 utilities = st.sidebar.number_input("Monthly Utilities", value=60.0)
 other_fixed = st.sidebar.number_input("Other Monthly Fixed Expenses", value=0.0)
