@@ -128,7 +128,7 @@ for period in range(biweeks):
 timeline_df = pd.DataFrame(timeline)
 
 # --- ADD BIWEEKLY DATES ---
-start_date = datetime(2025, 5, 28)
+start_date = datetime(2025, 6, 9)
 biweekly_dates = [start_date + timedelta(weeks=2 * i) for i in range(len(timeline_df))]
 timeline_df["Date"] = biweekly_dates
 timeline_df = timeline_df[["Date"] + [col for col in timeline_df.columns if col != "Date"]]
