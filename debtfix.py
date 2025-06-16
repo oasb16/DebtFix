@@ -3,8 +3,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import boto3
-from datetime import datetime, timedelta, date
-import decimal
+from datetime import datetime, timedelta
 
 # --- PAGE SETUP ---
 st.set_page_config(page_title="Omkar's ∞ Biweekly Paydown Engine", layout="wide")
@@ -19,7 +18,21 @@ dynamodb = boto3.resource(
 )
 table = dynamodb.Table("debtfix_cards")
 
-# --- INIT DYNAMODB ---
+
+
+
+
+
+
+import streamlit as st
+import pandas as pd
+import boto3
+import numpy as np
+import decimal
+from datetime import datetime, date
+from boto3.dynamodb.conditions import Key
+
+# --- AWS DYNAMODB INIT ---
 dynamodb = boto3.resource(
     'dynamodb',
     aws_access_key_id=st.secrets["AWS_ACCESS_KEY"],
@@ -28,27 +41,13 @@ dynamodb = boto3.resource(
 )
 table = dynamodb.Table("debtfix_cards")
 
-# --- CLEANER ---
-def sanitize_dynamodb_item(item):
-    def sanitize(value):
-        if value is None or (isinstance(value, float) and np.isnan(value)):
-            return None
-        elif isinstance(value, (np.integer, int)):
-            return int(value)
-        elif isinstance(value, (np.floating, float, decimal.Decimal)):
-            return float(value)
-        elif isinstance(value, (datetime, date)):
-            return value.isoformat()
-        elif isinstance(value, dict):
-            return {k: sanitize(v) for k, v in value.items() if v is not None}
-        elif isinstance(value, list):
-            return [sanitize(v) for v in value if v is not None]
-        else:
-            return str(value) if not isinstance(value, str) else value
+# --- DECIMAL-SAFE CONVERSION ---
+def to_decimal(value):
+    if isinstance(value, (int, float, np.integer, np.floating)):
+        return decimal.Decimal(str(round(value, 8)))  # Limit precision for safety
+    return value
 
-    return sanitize(item)
-
-# --- CARD ADDITION FORM ---
+# --- CARD FORM ---
 with st.expander("➕ Add New Credit Card / Loan", expanded=True):
     with st.form("card_form", clear_on_submit=False):
         card_name = st.text_input("Card Name")
@@ -58,42 +57,46 @@ with st.expander("➕ Add New Credit Card / Loan", expanded=True):
         card_type = st.selectbox("Type", ["Credit", "Loan"])
         submit = st.form_submit_button("💾 Add Card")
 
-        if submit and card_name:
+        if submit and card_name.strip():
             try:
-                raw_item = {
+                item = {
                     "Name": card_name.strip(),
-                    "Balance": balance,
-                    "Limit": limit,
-                    "APR": apr,
+                    "Balance": to_decimal(balance),
+                    "Limit": to_decimal(limit),
+                    "APR": to_decimal(apr),
                     "Type": card_type
                 }
-                sanitized_item = sanitize_dynamodb_item(raw_item)
-                if any(v is None for v in sanitized_item.values()):
-                    st.warning("⚠️ Some fields are missing or invalid. Please double-check.")
-                else:
-                    table.put_item(Item=sanitized_item)
-                    st.success(f"✅ {card_name} saved to DynamoDB.")
+                table.put_item(Item=item)
+                st.success(f"✅ {card_name} saved to DynamoDB.")
             except Exception as e:
-                st.error("❌ Error saving card to DynamoDB.")
+                st.error("❌ Failed to save card.")
                 st.exception(e)
 
-# --- LOAD CARDS FROM DB ---
+# --- LOAD & DISPLAY CARDS ---
 try:
     response = table.scan()
     items = response.get("Items", [])
     if not items:
-        st.warning("🟡 No cards found. Add one above.")
+        st.warning("🟡 No cards found in the database.")
     else:
         df = pd.DataFrame(items)
+        # Convert Decimal to float for display
+        for col in ["Balance", "Limit", "APR"]:
+            if col in df.columns:
+                df[col] = df[col].apply(lambda x: float(x) if isinstance(x, decimal.Decimal) else x)
+
         st.subheader("📄 Cards Stored in DynamoDB")
         st.dataframe(df, use_container_width=True)
 except Exception as e:
-    st.error("❌ Failed to load cards.")
+    st.error("❌ Could not load card data from DynamoDB.")
     st.exception(e)
 
-# --- PREVIEW LOADED CARDS ---
-st.subheader("📄 Cards Stored in DynamoDB")
-st.dataframe(initial_data, use_container_width=True)
+
+
+
+
+
+
 
 
 # --- SIDEBAR CONFIG ---
