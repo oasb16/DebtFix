@@ -28,25 +28,24 @@ dynamodb = boto3.resource(
 )
 table = dynamodb.Table("debtfix_cards")
 
-# --- UTILITY: SANITIZER ---
+# --- CLEANER ---
 def sanitize_dynamodb_item(item):
     def sanitize(value):
-        if value is None:
+        if value is None or (isinstance(value, float) and np.isnan(value)):
             return None
-        elif isinstance(value, (np.integer, np.int64, np.int32)):
+        elif isinstance(value, (np.integer, int)):
             return int(value)
-        elif isinstance(value, (np.floating, np.float64, np.float32)):
+        elif isinstance(value, (np.floating, float, decimal.Decimal)):
             return float(value)
         elif isinstance(value, (datetime, date)):
             return value.isoformat()
-        elif isinstance(value, decimal.Decimal):
-            return float(value)
         elif isinstance(value, dict):
             return {k: sanitize(v) for k, v in value.items() if v is not None}
         elif isinstance(value, list):
-            return [sanitize(v) for v in value]
+            return [sanitize(v) for v in value if v is not None]
         else:
-            return value
+            return str(value) if not isinstance(value, str) else value
+
     return sanitize(item)
 
 # --- CARD ADDITION FORM ---
@@ -60,19 +59,22 @@ with st.expander("➕ Add New Credit Card / Loan", expanded=True):
         submit = st.form_submit_button("💾 Add Card")
 
         if submit and card_name:
-            raw_item = {
-                "Name": card_name,
-                "Balance": balance,
-                "Limit": limit,
-                "APR": apr,
-                "Type": card_type
-            }
             try:
+                raw_item = {
+                    "Name": card_name.strip(),
+                    "Balance": balance,
+                    "Limit": limit,
+                    "APR": apr,
+                    "Type": card_type
+                }
                 sanitized_item = sanitize_dynamodb_item(raw_item)
-                table.put_item(Item=sanitized_item)
-                st.success(f"✅ {card_name} added to DynamoDB!")
+                if any(v is None for v in sanitized_item.values()):
+                    st.warning("⚠️ Some fields are missing or invalid. Please double-check.")
+                else:
+                    table.put_item(Item=sanitized_item)
+                    st.success(f"✅ {card_name} saved to DynamoDB.")
             except Exception as e:
-                st.error("❌ Failed to save card.")
+                st.error("❌ Error saving card to DynamoDB.")
                 st.exception(e)
 
 # --- LOAD CARDS FROM DB ---
@@ -80,13 +82,14 @@ try:
     response = table.scan()
     items = response.get("Items", [])
     if not items:
-        st.warning("🟡 No card data found. Add a card to begin.")
-        st.stop()
-    initial_data = pd.DataFrame(items)
+        st.warning("🟡 No cards found. Add one above.")
+    else:
+        df = pd.DataFrame(items)
+        st.subheader("📄 Cards Stored in DynamoDB")
+        st.dataframe(df, use_container_width=True)
 except Exception as e:
-    st.error("❌ Error loading cards from DynamoDB.")
+    st.error("❌ Failed to load cards.")
     st.exception(e)
-    st.stop()
 
 # --- PREVIEW LOADED CARDS ---
 st.subheader("📄 Cards Stored in DynamoDB")
