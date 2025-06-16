@@ -3,7 +3,8 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import boto3
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
+import decimal
 
 # --- PAGE SETUP ---
 st.set_page_config(page_title="Omkar's ∞ Biweekly Paydown Engine", layout="wide")
@@ -18,10 +19,39 @@ dynamodb = boto3.resource(
 )
 table = dynamodb.Table("debtfix_cards")
 
+# --- INIT DYNAMODB ---
+dynamodb = boto3.resource(
+    'dynamodb',
+    aws_access_key_id=st.secrets["AWS_ACCESS_KEY"],
+    aws_secret_access_key=st.secrets["AWS_SECRET_ACCESS_KEY"],
+    region_name=st.secrets["AWS_REGION"]
+)
+table = dynamodb.Table("debtfix_cards")
+
+# --- UTILITY: SANITIZER ---
+def sanitize_dynamodb_item(item):
+    def sanitize(value):
+        if value is None:
+            return None
+        elif isinstance(value, (np.integer, np.int64, np.int32)):
+            return int(value)
+        elif isinstance(value, (np.floating, np.float64, np.float32)):
+            return float(value)
+        elif isinstance(value, (datetime, date)):
+            return value.isoformat()
+        elif isinstance(value, decimal.Decimal):
+            return float(value)
+        elif isinstance(value, dict):
+            return {k: sanitize(v) for k, v in value.items() if v is not None}
+        elif isinstance(value, list):
+            return [sanitize(v) for v in value]
+        else:
+            return value
+    return sanitize(item)
 
 # --- CARD ADDITION FORM ---
-with st.expander("➕ Add New Credit Card / Loan"):
-    with st.form("card_form", clear_on_submit=True):
+with st.expander("➕ Add New Credit Card / Loan", expanded=True):
+    with st.form("card_form", clear_on_submit=False):
         card_name = st.text_input("Card Name")
         balance = st.number_input("Current Balance", min_value=0.0, step=100.0)
         limit = st.number_input("Credit Limit (0 if N/A)", min_value=0.0, step=100.0)
@@ -30,21 +60,38 @@ with st.expander("➕ Add New Credit Card / Loan"):
         submit = st.form_submit_button("💾 Add Card")
 
         if submit and card_name:
-            table.put_item(Item={
+            raw_item = {
                 "Name": card_name,
-                "Balance": float(balance),
-                "Limit": float(limit),
-                "APR": float(apr),
+                "Balance": balance,
+                "Limit": limit,
+                "APR": apr,
                 "Type": card_type
-            })
-            st.success(f"✅ {card_name} added!")
+            }
+            try:
+                sanitized_item = sanitize_dynamodb_item(raw_item)
+                table.put_item(Item=sanitized_item)
+                st.success(f"✅ {card_name} added to DynamoDB!")
+            except Exception as e:
+                st.error("❌ Failed to save card.")
+                st.exception(e)
 
 # --- LOAD CARDS FROM DB ---
-response = table.scan()
-initial_data = pd.DataFrame(response["Items"])
-if initial_data.empty:
-    st.warning("🟡 No card data found. Add a card to begin.")
+try:
+    response = table.scan()
+    items = response.get("Items", [])
+    if not items:
+        st.warning("🟡 No card data found. Add a card to begin.")
+        st.stop()
+    initial_data = pd.DataFrame(items)
+except Exception as e:
+    st.error("❌ Error loading cards from DynamoDB.")
+    st.exception(e)
     st.stop()
+
+# --- PREVIEW LOADED CARDS ---
+st.subheader("📄 Cards Stored in DynamoDB")
+st.dataframe(initial_data, use_container_width=True)
+
 
 # --- SIDEBAR CONFIG ---
 st.sidebar.header("💼 Income & Fixed Expenses")
