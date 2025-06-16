@@ -29,7 +29,7 @@ def from_decimal(val):
     return float(val) if isinstance(val, decimal.Decimal) else val
 
 # --- CARD FORM ---
-with st.expander("➕ Add New Credit Card / Loan", expanded=True):
+with st.expander("➕ Add New Credit Card / Loan", expanded=False):
     with st.form("card_form", clear_on_submit=False):
         card_name = st.text_input("Card Name")
         balance = st.number_input("Current Balance", min_value=0.0, step=100.0)
