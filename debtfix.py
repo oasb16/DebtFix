@@ -65,10 +65,78 @@ try:
         for col in ["Balance", "Limit", "APR"]:
             if col in initial_data.columns:
                 initial_data[col] = initial_data[col].apply(from_decimal)
+        
 except Exception as e:
     st.error("❌ Error loading data from DynamoDB.")
     st.exception(e)
     initial_data = pd.DataFrame(columns=["Name", "Balance", "Limit", "APR", "Type"])
+
+# --- Payment Logging & Interest Tracking ---
+
+def log_payment(card_name, amount, pay_date):
+    """
+    Log a payment, reduce balance in DynamoDB, and update interest tracking.
+    """
+    # Fetch latest item
+    response = table.get_item(Key={"Name": card_name})
+    item = response.get("Item")
+    if not item:
+        st.error(f"Card {card_name} not found.")
+        return
+
+    balance = float(item.get("Balance", 0))
+    apr = float(item.get("APR", 0))
+    last_date = item.get("LastPaymentDate", datetime.now().isoformat())
+    last_date = datetime.fromisoformat(last_date) if isinstance(last_date, str) else last_date
+
+    # Interest accrued since last payment
+    days_elapsed = (pay_date - last_date.date()).days
+    daily_rate = apr / 100 / 365
+    interest_accrued = balance * daily_rate * max(days_elapsed, 0)
+
+    # Update balance
+    new_balance = max(balance - amount, 0)
+
+    # Update DB
+    table.update_item(
+        Key={"Name": card_name},
+        UpdateExpression="""
+            SET Balance = :b, 
+                LastPaymentDate = :d, 
+                InterestPaid = if_not_exists(InterestPaid, :zero) + :int_paid,
+                InterestAccrued = if_not_exists(InterestAccrued, :zero) + :int_acc
+        """,
+        ExpressionAttributeValues={
+            ":b": decimal.Decimal(str(round(new_balance, 2))),
+            ":d": pay_date.isoformat(),
+            ":int_paid": decimal.Decimal("0"),  # All payments apply to principal in this model
+            ":int_acc": decimal.Decimal(str(round(interest_accrued, 2))),
+            ":zero": decimal.Decimal("0")
+        }
+    )
+    st.success(f"✅ {card_name}: ${amount:,.2f} payment logged. +${interest_accrued:.2f} interest accrued.")
+
+# --- Add Live Interest & Payment Form for Each Card ---
+st.subheader("🔁 Card Payment Manager + Interest Burn")
+
+for idx, row in initial_data.iterrows():
+    card_name = row["Name"]
+    balance = row["Balance"]
+    apr = row["APR"]
+
+    with st.expander(f"💳 {card_name} – ${balance:,.2f} @ {apr:.2f}% APR"):
+        # Live interest rate (burn rate)
+        daily_rate = apr / 100 / 365
+        daily_interest = balance * daily_rate
+        st.markdown(f"📉 **Daily Interest Burn Rate:** `${daily_interest:.2f}`/day")
+
+        # Payment form
+        with st.form(f"form_{card_name}", clear_on_submit=True):
+            amount = st.number_input("Payment Amount", min_value=0.01, key=f"amt_{card_name}")
+            pay_date = st.date_input("Payment Date", value=datetime.today(), key=f"dt_{card_name}")
+            submit = st.form_submit_button("💾 Log Payment")
+            if submit:
+                log_payment(card_name, amount, pay_date)
 
 # --- SIDEBAR CONFIG ---
 st.sidebar.header("💼 Income & Fixed Expenses")
